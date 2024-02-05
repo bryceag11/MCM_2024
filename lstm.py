@@ -1,29 +1,47 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-
-
+import numpy as np
 
 class LSTMMomentumPredictor(nn.Module):
-
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, input_size):
+    def __init__(self, hidden_layer_size=50, dropout_rate=0.5):
         super(LSTMMomentumPredictor, self).__init__()
-        self.hidden_dim = hidden_dim
+        self.hidden_layer_size = hidden_layer_size 
 
-        # Embedded layers for the player names
-        self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
+        # Convolutional layers 
+        self.conv1 = nn.Conv1d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.batch_norm = nn.BatchNorm1d(16)
+        self.relu = nn.ReLU()
+        self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
 
-        # LSTM layer for sequence processing 
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim)
+        # LSTM layer
+        self.lstm = nn.LSTM(input_size=16, hidden_size=self.hidden_layer_size, num_layers=1, batch_first=True, bidirectional=True)
 
-        # Output layer for binary classification
-        self.hidden2output = nn.Linear(input_size, 1)
+        # Dropout 
+        self.dropout = nn.Dropout(p=dropout_rate)
 
-    def forward(self, sequence):
-        embeds = self.word_embeddings(sequence)
-        lstm_out, _ = self.lstm(embeds.view(len(sequence), 1, -1))
-        output = self.hidden2output(lstm_out.view(len(sequence), -1))
-        output = torch.sigmoid(output)
-        return output
+        # Fully connected layers for two outputs
+        self.linear_p1 = nn.Linear(in_features=self.hidden_layer_size * 2, out_features=1)
+        self.linear_p2 = nn.Linear(in_features=self.hidden_layer_size * 2, out_features=1)
+
+    def forward(self, x):
+        # Convolutional layers 
+        x = self.conv1(x)
+        x = self.batch_norm(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        # # LSTM transpose
+        x = x.transpose(1, 2)
+
+        # LSTM layer  
+        lstm_out, _ = self.lstm(x)
+
+        # Dropout application
+        lstm_out = self.dropout(lstm_out)
+
+        # Fully connected for two outputs
+        predictions_p1 = self.linear_p1(lstm_out[:, -1, :])
+        predictions_p2 = self.linear_p2(lstm_out[:, -1, :])
+
+        return predictions_p1, predictions_p2
 
