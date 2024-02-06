@@ -6,15 +6,6 @@ class MomentumFeatures():
     def __init__(self, df):
         self.df = df
         self.trans_df = pd.DataFrame({})
-
-        # self.point_ratio()
-        # self.win_streak()
-        # self.pressure_index()
-        # self.fatigue_factor()
-        # self.serve_efficiency()
-        # self.return_efficiency()
-        # self.point_context()
-        # self.match_context()
         self.current_index = 0
         self.df_last_ind = len(df) - 1
         # values needed as rows are processed iteratively
@@ -147,20 +138,12 @@ class MomentumFeatures():
         self.trans_df.loc[index, 'p2_set_streaks'] = self.total_set_streaks['p2']
 
     def pressure_index(self, row):
-        ## Pressure Index
-
         self.df['p1_break_pt_efficiency'] = np.where(self.df['p1_break_pt'].cumsum() != 0, self.df['p1_break_pt_won'].cumsum() / self.df['p1_break_pt'].cumsum(), 0)
         self.df['p2_break_pt_efficiency'] = np.where(self.df['p2_break_pt'].cumsum() != 0, self.df['p2_break_pt_won'].cumsum() / self.df['p2_break_pt'].cumsum(), 0)
-        # print(self.df['p2_break_pt_efficiency'][-30:])  
-        # print(self.df['p1_break_pt'].cumsum())      
 
         self.df['p1_break_pt_saved_rat'] = np.where(self.df['p2_break_pt_efficiency'].cumsum() != 0, 1 - self.df['p2_break_pt_efficiency'], 0)
         self.df['p2_break_pt_saved_rat'] = np.where(self.df['p1_break_pt_efficiency'].cumsum() != 0, 1 - self.df['p1_break_pt_efficiency'], 0)
 
-        # high_pressure = #break points # tie break points # large no of ralies # high velocity
-
-        ## WE NEED SPEED FEATURES TO PROPERLY DIFINE HIGH PRESSURE
-        # current high_pressure = ()
         self.df['speed_mph_average'] = self.df['speed_mph'].cumsum() / (self.df.index + 1)
         self.df['rally_count_average'] = self.df['rally_count'].cumsum() / (self.df.index + 1)
 
@@ -170,9 +153,6 @@ class MomentumFeatures():
         self.df['p2_high_pressure'] = np.where(((self.df['p2_break_pt'] == 1)) & (self.df['speed_mph'] > self.df['speed_mph_average'])
                                         & (self.df['rally_count'] > self.df['rally_count_average']), 1, 0)
 
-        # df['p2_high_pressure'] = np.where(((df['p2_break_pt'] == 1)) & (df['speed_mph'] > df['speed_mph_average'] )
-        #     & (df['rally_count'] > df['rally_count_average'])), 1, 0)
-
         self.df['p1_high_pressure_win'] = np.where(self.df['point_victor'] == 1, self.df['p1_high_pressure'], 0)
         self.df['p2_high_pressure_win'] = np.where(self.df['point_victor'] == 2, self.df['p2_high_pressure'], 0)
 
@@ -181,18 +161,11 @@ class MomentumFeatures():
         self.df['p2_high_pressure_win_ratio'] = np.where(self.df['p2_high_pressure'].cumsum() != 0,
                                                     self.df['p2_high_pressure_win'].cumsum() / self.df['p2_high_pressure'].cumsum(), 0)
 
-        ## Pressure index= CR+SR+HPW
-        # Repetitive currently CR = HPW
         self.df['p1_pressure_index'] = self.df['p1_break_pt_efficiency'] + self.df['p1_break_pt_saved_rat'] + self.df['p1_high_pressure_win_ratio']
         self.df['p2_pressure_index'] = self.df['p2_break_pt_efficiency'] + self.df['p2_break_pt_saved_rat'] + self.df['p2_high_pressure_win_ratio']
 
-        # print(df['p1_high_pressure_win_ratio'][:301])
-        # print(self.df['p1_pressure_index'][:301])
-        # print(df['p2_break_pt_efficiency'], df['p2_high_pressure_win_ratio'])
-
         self.trans_df['p1_pressure_index'] = self.df['p1_pressure_index'].values[:row + 1]
         self.trans_df['p2_pressure_index'] = self.df['p2_pressure_index'].values[:row + 1]
-        # print(self.trans_df['p2_pressure_index'][-30:])
         
         self.trans_df['p1_break_pt_efficiency'] = self.df['p1_break_pt_efficiency'].values[:row + 1]
         self.trans_df['p2_break_pt_efficiency'] = self.df['p2_break_pt_efficiency'].values[:row + 1]
@@ -200,7 +173,6 @@ class MomentumFeatures():
 
     def fatigue_factor(self, row):
 
-        # Example implementation, modify as needed
         if row > 0:
             elapsed_time = self.df['elapsed_time'].iloc[row] - self.df['elapsed_time'].iloc[row-1] # Assuming 'elapsed_time' is already normalized between 0 and 1
         else:
@@ -211,7 +183,6 @@ class MomentumFeatures():
 
         self.trans_df.at[self.current_index, 'tw_arc'] = diff_times_rally / total_elapsed_time
 
-        # Separate assignment for each index
         p1_fatigue_index = (self.df.iloc[row]['p1_distance_run'] + self.df.iloc[row]['rally_count']) / total_elapsed_time
         p2_fatigue_index = (self.df.iloc[row]['p2_distance_run'] + self.df.iloc[row]['rally_count']) / total_elapsed_time
 
@@ -219,40 +190,22 @@ class MomentumFeatures():
         self.trans_df.at[self.current_index, 'p2_fatigue_index'] = p2_fatigue_index
 
     def serve_efficiency(self, row):
-        ## Ace ratio
         main_df = self.df.copy()
 
         main_df['p1_ace_count'] = main_df['p1_ace'].cumsum()
         main_df['p2_ace_count'] = main_df['p2_ace'].cumsum()
 
-        # main_df['p1_serve_count'] = df.groupby('server').cumcount() + 1
-
         main_df['p1_serve_count'] = (self.df['server'] == 1).cumsum()
         main_df['p2_serve_count'] = (self.df['server'] == 2).cumsum()
 
-
-        # main_df['p1_ace_ratio'] = main_df['p1_ace_count'] / main_df['p1_serve_count']
-        # main_df['p2_ace_ratio'] = main_df['p2_ace_count'] / main_df['p2_serve_count']
-
         main_df['p1_ace_ratio'] = np.where(main_df['p1_serve_count'] != 0, main_df['p1_ace_count'] / main_df['p1_serve_count'], 0)
         main_df['p2_ace_ratio'] = np.where(main_df['p2_serve_count'] != 0, main_df['p2_ace_count'] / main_df['p2_serve_count'], 0)
-
-        # print(main_df['p2_ace_count'])
-        # print(main_df['p2_serve_count'])
-        # print(main_df['p1_ace_ratio'])
-
-        ## Double fault ratio
 
         main_df['p1_double_fault_count'] = main_df['p1_double_fault'].cumsum()
         main_df['p2_double_fault_count'] = main_df['p2_double_fault'].cumsum()
 
         main_df['p1_double_fault_ratio'] = np.where(main_df['p1_serve_count'] != 0, main_df['p1_double_fault_count'] / main_df['p1_serve_count'], 0)
         main_df['p2_double_fault_ratio'] = np.where(main_df['p2_serve_count'] != 0, main_df['p2_double_fault_count'] / main_df['p2_serve_count'], 0)
-
-        # print(main_df['p1_double_fault_ratio'])
-
-
-        ## Successful First Serve ratio: 1- fault ratio
 
         main_df['p1_fault_count'] = ((main_df['serve_no'] == 2) & (main_df['server'] == 1)).cumsum()
         main_df['p2_fault_count'] = ((main_df['serve_no'] == 2) & (main_df['server'] == 2)).cumsum()
@@ -263,27 +216,13 @@ class MomentumFeatures():
         main_df['p1_good_serve_ratio'] = np.where(main_df['p1_fault_ratio'] != 0, 1 - main_df['p1_fault_ratio'], 0)
         main_df['p2_good_serve_ratio'] = np.where(main_df['p2_fault_ratio'] != 0, 1 - main_df['p2_fault_ratio'], 0)
 
-
         self.trans_df['p1_serve_efficiency'] = main_df['p1_ace_ratio'].values[:row + 1] + (main_df['p1_good_serve_ratio'].values[:row + 1]) - main_df['p1_double_fault_ratio'].values[:row + 1]
         self.trans_df['p2_serve_efficiency'] = main_df['p2_ace_ratio'].values[:row + 1] + (main_df['p2_good_serve_ratio'].values[:row + 1]) - main_df['p2_double_fault_ratio'].values[:row + 1]
-
-
-
-
-
-
+        
     def match_context(self, row):
-        # self.trans_df.loc[row, 'set_no'] = df['set_no'].iloc[row]
-        # # self.trans_df.loc[row,'game_no'] = df['game_no'].iloc[row]
-        # self.trans_df.loc[row,'p1_sets'] = df['p1_sets'].iloc[row]
-        # self.trans_df.loc[row,'p2_sets'] = df['p2_sets'].iloc[row]
-        # self.trans_df.loc[row,'p1_games'] = df['p1_games'].iloc[row]
-        # self.trans_df.loc[row,'p2_games'] = df['p2_games'].iloc[row]
         self.trans_df.loc[row, 'elapsed_time'] = self.df['elapsed_time'].iloc[row]
 
     def process_row(self, index):
-        
-        # Create a new DataFrame for the current row
         current_row_df = pd.DataFrame()
 
         if 'p1_serve_efficiency' not in self.trans_df.columns: # 0 & 1
