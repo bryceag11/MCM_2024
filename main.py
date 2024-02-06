@@ -97,7 +97,7 @@ df['speed_mph'].fillna(0, inplace=True)
 dft = df.copy()
 df = df.iloc[0:302]
 
-dft = dft.iloc[6952:7286]
+dft = dft.iloc[6952:7254]
         
 
 momentum = MomentumFeatures(df)
@@ -126,54 +126,83 @@ momentum_dft = pd.concat(momentum_dfst, ignore_index=True)
 training_set = momentum_df.iloc[:, :16]
 test_set = momentum_dft.iloc[:, :16]
 
-normalized_df = (training_set - training_set.mean()) / training_set.std()
-normalized_dft = (test_set - test_set.mean()) / test_set.std()
+mean_training_set = training_set.mean()
+std_training_set = training_set.std()
 
-nan_columns_train = normalized_df.columns[normalized_df.isna().any()].tolist()
-nan_rows_train = normalized_df[normalized_df.isna().any(axis=1)]
+# Check if standard deviation is zero and replace with a small value
+std_training_set[std_training_set == 0] = 1e-6
 
-nan_columns_test = normalized_dft.columns[normalized_dft.isna().any()].tolist()
-nan_rows_test = normalized_dft[normalized_dft.isna().any(axis=1)]
+# Normalize the training set
+normalized_df = (training_set - mean_training_set) / std_training_set
 
-print("Columns with NaN values in training data:", nan_columns_train)
-print("Rows with NaN values in training data:", nan_rows_train)
+# Use the mean and standard deviation from the training set to normalize the test set
+normalized_dft = (test_set - mean_training_set) / std_training_set
 
-print("Columns with NaN values in test data:", nan_columns_test)
-print("Rows with NaN values in test data:", nan_rows_test)
+# Assuming you have normalized_df and normalized_dft defined
 
 feature_weights = np.array([0.7, 0.7, 0.8, 0.8, 0.9, 0.9, 1.0, 1.0, 0.2, 0.2, 0.5, 0.5, 0.4, 0.4, 0.2, 0.2])
 weighted_df = normalized_df * feature_weights 
 weighted_dft = normalized_dft * feature_weights
 
-momentum_p1 = weighted_df.iloc[:, [0, 2, 4, 6, 8, 10, 12, 14]].sum(axis=1)
-momentum_p2 = weighted_df.iloc[:, [1, 3, 5, 7, 9, 11, 13, 15]].sum(axis=1)
+weighted_df.fillna(0, inplace=True)
+weighted_dft.fillna(0, inplace=True)
 
-momentum_p1t = weighted_dft.iloc[:, [0, 2, 4, 6, 8, 10, 12, 14]].sum(axis=1)
-momentum_p2t = weighted_dft.iloc[:, [1, 3, 5, 7, 9, 11, 13, 15]].sum(axis=1)
+mom_p1 = weighted_df.iloc[:, ::2]
+mom_p2 = weighted_df.iloc[:, 1::2]
 
-# Combine into a matrix
-raw_momentums = np.vstack([momentum_p1, momentum_p2])
-raw_momentumst = np.vstack([momentum_p1t, momentum_p2t])
-
-# Apply softmax activation
-def softmax(x):
-    exp_x = np.exp(x - np.max(x))
-    return exp_x / exp_x.sum(axis=0, keepdims=True)
-
-normalized_momentums = softmax(raw_momentums)
-normalized_momentumst = softmax(raw_momentumst)
+mom_p1t = weighted_dft.iloc[:, ::2]
+mom_p2t = weighted_dft.iloc[:, 1::2]
 
 
-# # Separate back into individual player momentums
-normalized_momentum_p1 = normalized_momentums[0, :]
-normalized_momentum_p1t = normalized_momentumst[0, :]
-normalized_momentum_p2 = normalized_momentums[1, :]
-normalized_momentum_p2t = normalized_momentumst[1, :]
+momentum_p1 = pd.DataFrame(index=mom_p1.index, columns=['Momentum_P1'])
+momentum_p2 = pd.DataFrame(index=mom_p2.index, columns=['Momentum_P2'])
 
+momentum_p1t = pd.DataFrame(index=mom_p1t.index, columns=['Momentum_P1T'])
+momentum_p2t = pd.DataFrame(index=mom_p2t.index, columns=['Momentum_P2T'])
+
+
+def normalize_values(mom_sum):
+    mom_sum = np.maximum(0, mom_sum)  # Set negative values to 0
+    mom_sum = np.minimum(1, mom_sum)  # Set values greater than 1 to 1
+    return mom_sum
+
+for i in range(len(mom_p1)):
+    mom_p1_sum = mom_p1.iloc[i, :].sum()
+    mom_p2_sum = mom_p2.iloc[i, :].sum()
+
+    # Normalize the sum to ensure it equals 1
+    total_momentum = mom_p1_sum + mom_p2_sum
+    if total_momentum != 1:
+        mom_p1_sum /= total_momentum
+        mom_p2_sum /= total_momentum
+
+    mom_p1_sum = normalize_values(mom_p1_sum)
+    mom_p2_sum = normalize_values(mom_p2_sum)
+    # Update DataFrame
+    momentum_p1.loc[i, 'Momentum_P1'] = mom_p1_sum
+    momentum_p2.loc[i, 'Momentum_P2'] = mom_p2_sum
+
+for i in range(len(mom_p1t)):
+    mom_p1t_sum = mom_p1t.iloc[i, :].sum()
+    mom_p2t_sum = mom_p2t.iloc[i, :].sum()
+
+    # Normalize the sum to ensure it equals 1
+    total_momentum_t = mom_p1t_sum + mom_p2t_sum
+    if total_momentum_t != 1:
+        mom_p1t_sum /= total_momentum_t
+        mom_p2t_sum /= total_momentum_t
+
+    mom_p1t_sum = normalize_values(mom_p1t_sum)
+    mom_p2t_sum = normalize_values(mom_p2t_sum)
+
+    # Update DataFrame
+    momentum_p1t.loc[i, 'Momentum_P1T'] = mom_p1t_sum
+    momentum_p2t.loc[i, 'Momentum_P2T'] = mom_p2t_sum
+print(momentum_p1, momentum_p2)
 # ###################################################################################
 
 
-# #######################
+# # #######################
 # # Assuming feature_df is your feature DataFrame and y_train_p1, y_train_p2 are target data
 feature_df_np = normalized_df.to_numpy(dtype=np.float32)
 feature_dft_np = normalized_dft.to_numpy(dtype=np.float32)
@@ -181,21 +210,57 @@ feature_dft_np = normalized_dft.to_numpy(dtype=np.float32)
 x_train = torch.from_numpy(feature_df_np).float().unsqueeze(0)
 x_test = torch.from_numpy(feature_dft_np).float().unsqueeze(0)
 
-# Reshape x_train to (1, 10, 142) assuming you have 10 features and 142 data points
+# Reshape x_train to (1, 16, 302) assuming you have 16 features and 302 data points
 x_train = x_train.transpose(1, 2)
 x_test = x_test.transpose(1, 2)
 
 
-# Assuming y_train_p1 and y_train_p2 are your target data for momentum_p1 and momentum_p2
-y_train_p1 = torch.tensor(normalized_momentum_p1, dtype=torch.float32)
-y_train_p2 = torch.tensor(normalized_momentum_p2, dtype=torch.float32)
-y_test_p1 = torch.tensor(normalized_momentum_p1t, dtype=torch.float32)
-y_test_p2 = torch.tensor(normalized_momentum_p2t, dtype=torch.float32)
+
+numpy_momentum_p1 = momentum_p1.values.astype(np.float32)
+numpy_momentum_p2 = momentum_p2.values.astype(np.float32)
+numpy_momentum_p1t = momentum_p1t.values.astype(np.float32)
+numpy_momentum_p2t = momentum_p2t.values.astype(np.float32)
+
+# Convert to PyTorch tensors
+y_train_p1 = torch.tensor(numpy_momentum_p1, dtype=torch.float32)
+y_train_p2 = torch.tensor(numpy_momentum_p2, dtype=torch.float32)
+y_test_p1 = torch.tensor(numpy_momentum_p1t, dtype=torch.float32)
+y_test_p2 = torch.tensor(numpy_momentum_p2t, dtype=torch.float32)
+
+plt.figure(figsize=(15, 8))
+
+# Calculate the delta or change in scores for both P1 and P2
+delta_p1 = df['p1_score'].diff()
+delta_p2 = df['p2_score'].diff()
+
+# Normalize the scores between 0 and 1
+normalized_p1 = (df['p1_score'] - df['p1_score'].min()) / (df['p1_score'].max() - df['p1_score'].min())
+normalized_p2 = (df['p2_score'] - df['p2_score'].min()) / (df['p2_score'].max() - df['p2_score'].min())
 
 
+# Plot the delta or change in points against the momentum for P1
 
+fig, axes = plt.subplots(nrows=2, ncols=1, sharex=True, figsize=(24, 16))
 
+# Plot the scaled delta scores against the momentum for P1
+axes[0].plot(range(302), momentum_p1, label='Momentum P1 (Train)')
+axes[0].plot(range(302), normalized_p1, label='Scaled Delta P1 Score')
+axes[0].set_ylabel('Momentum P1 / Scaled Delta P1 Score')
+axes[0].set_title('Momentum P1 vs Scaled Delta P1 Score (Train)')
+axes[0].legend()
 
+# Plot the scaled delta scores against the momentum for P2
+axes[1].plot(range(302), momentum_p2, label='Momentum P2 (Train)')
+axes[1].plot(range(302), normalized_p2, label='Scaled Delta P2 Score')
+axes[1].set_xlabel('Data Index')
+axes[1].set_ylabel('Momentum P2 / Scaled Delta P2 Score')
+axes[1].set_title('Momentum P2 vs Scaled Delta P2 Score (Train)')
+axes[1].legend()
+
+# Adjust layout for better spacing
+plt.tight_layout()
+
+plt.show()
 
 # Instantiate the model
 model = LSTMMomentumPredictor()
@@ -206,11 +271,10 @@ criterion = nn.MSELoss()
 # Define the optimizer
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-epochs = 100
+epochs = 1000
 batch_size = 1
 training_losses = []  # To store training losses for visualization
 
-print(len(x_train))
 for epoch in range(epochs):
     epoch_loss = 0.0  # Accumulator for epoch loss
 
@@ -241,46 +305,111 @@ for epoch in range(epochs):
     # Store average epoch loss
     training_losses.append(epoch_loss / len(x_train))
 
-    # Print training statistics
-    print(f'Epoch [{epoch+1}/{epochs}], Loss: {training_losses[-1]}')
+epochs_range = range(1, epochs + 1)
+
+# plt.plot(epochs_range, training_losses, label='Training Loss')
+# plt.title('Training Loss Over Epochs')
+# plt.xlabel('Epoch')
+# plt.ylabel('Loss')
+# plt.legend()
+# plt.show()
+
+from sklearn.metrics import mean_squared_error, r2_score, precision_recall_fscore_support, precision_recall_curve
+
+def evaluate_model(model, x_test, y_test_p1, y_test_p2, threshold_p1, threshold_p2):
+    model.eval()
+
+    with torch.no_grad():
+        # Forward pass on the test set
+        y_pred_p1, y_pred_p2 = model(x_test)
+
+        # Regression Metrics
+        mse_p1 = mean_squared_error(y_test_p1, y_pred_p1.squeeze().numpy())
+        mse_p2 = mean_squared_error(y_test_p2, y_pred_p2.squeeze().numpy())
+
+        r2_p1 = r2_score(y_test_p1, y_pred_p1.squeeze().numpy())
+        r2_p2 = r2_score(y_test_p2, y_pred_p2.squeeze().numpy())
+
+        print(f'Mean Squared Error (MSE) - Momentum P1: {mse_p1:.4f}')
+        print(f'Mean Squared Error (MSE) - Momentum P2: {mse_p2:.4f}')
+        print(f'R-squared (R2) - Momentum P1: {r2_p1:.4f}')
+        print(f'R-squared (R2) - Momentum P2: {r2_p2:.4f}')
+
+        # Classification Metrics
+        y_pred_p1_binary = (y_pred_p1.squeeze().numpy() > threshold_p1).astype(int)
+        y_pred_p2_binary = (y_pred_p2.squeeze().numpy() > threshold_p2).astype(int)
+
+        y_test_p1_binary = (y_test_p1 > threshold_p1).numpy().astype(int)
+        y_test_p2_binary = (y_test_p2 > threshold_p2).numpy().astype(int)
+
+        precision_p1, recall_p1, f1_p1, _ = precision_recall_fscore_support(
+            y_test_p1_binary, y_pred_p1_binary, average='binary')
+        
+        precision_p2, recall_p2, f1_p2, _ = precision_recall_fscore_support(
+            y_test_p2_binary, y_pred_p2_binary, average='binary')
+        f1_p1 = f1_score(y_test_p1_binary, y_pred_p1_binary)
+
+        # Classification Metrics - Momentum P2
+        y_pred_p2_binary = (y_pred_p2.squeeze().numpy() > threshold_p2).astype(int)
+        y_test_p2_binary = (y_test_p2 > threshold_p2).numpy().astype(int)
+
+        precision_p2, recall_p2, _, _ = precision_recall_fscore_support(
+            y_test_p2_binary, y_pred_p2_binary, average='binary')
+
+        f1_p2 = f1_score(y_test_p2_binary, y_pred_p2_binary)
+
+        # Plot Precision-Recall Curve
+        plt.figure(figsize=(12, 6))
+
+        plt.subplot(2, 2, 1)
+        precision_curve, recall_curve, _ = precision_recall_curve(y_test_p1_binary, y_pred_p1_binary)
+        plt.plot(recall_curve, precision_curve, label='Momentum P1')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall Curve - Momentum P1')
+        plt.legend()
+
+        plt.subplot(2, 2, 2)
+        precision_curve, recall_curve, _ = precision_recall_curve(y_test_p2_binary, y_pred_p2_binary)
+        plt.plot(recall_curve, precision_curve, label='Momentum P2')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall Curve - Momentum P2')
+        plt.legend()
+
+        plt.show()
+
+        # Plot Predicted vs True Values
+        plt.figure(figsize=(12, 6))
+
+        plt.subplot(3, 2, 1)
+        plt.scatter(y_test_p1.numpy(), y_pred_p1.squeeze().numpy(), c=y_test_p1_binary, cmap='viridis', label='Momentum P1')
+        plt.xlabel('True Values - Momentum P1')
+        plt.ylabel('Predicted Values - Momentum P1')
+        plt.title('Predicted vs True Values - Momentum P1')
+        plt.legend()
+
+        plt.subplot(3, 2, 2)
+        plt.scatter(y_test_p2.numpy(), y_pred_p2.squeeze().numpy(), c=y_test_p1_binary, cmap='viridis', label='Momentum P2')
+        plt.xlabel('True Values - Momentum P2')
+        plt.ylabel('Predicted Values - Momentum P2')
+        plt.title('Predicted vs True Values - Momentum P2')
+        plt.legend()
+
+        plt.show()
+
+        print(f'Threshold - Momentum P1: {threshold_p1}')
+        print(f'Precision - Momentum P1: {precision_p1:.4f}')
+        print(f'Recall - Momentum P1: {recall_p1:.4f}')
+        print(f'F1 Score - Momentum P1: {f1_p1:.4f}')
+
+        print(f'Threshold - Momentum P2: {threshold_p2}')
+        print(f'Precision - Momentum P2: {precision_p2:.4f}')
+        print(f'Recall - Momentum P2: {recall_p2:.4f}')
+        print(f'F1 Score - Momentum P2: {f1_p2:.4f}')
 
 
-# model.eval()  # Set the model to evaluation mode
-
-# with torch.no_grad():
-#     # Assuming x_test, y_test_p1, and y_test_p2 are your test set features and targets
-#     # x_test.transpose(1, 2)
-
-#     # Forward pass
-#     predictions_p1, predictions_p2 = model(x_test)
-
-#     # Assuming y_test_p1 and y_test_p2 are the true labels for the test set
-#     y_test_p1 = y_test_p1.flatten().numpy()
-
-#     y_test_p2 = y_test_p2.flatten().numpy()
-
-
-#     # Set the threshold for classification
-#     threshold = 0.5
-
-#     # Convert continuous predictions to binary labels
-#     binary_predictions_p1 = (predictions_p1 > threshold).float()
-#     binary_predictions_p2 = (predictions_p2 > threshold).float()
-
-#     # Print the shapes of binary predictions
-#     print("Binary Predictions Player 1:", binary_predictions_p1.shape)
-#     print("Binary Predictions Player 2:", binary_predictions_p2.shape)
-#     # Compute metrics for player 1
-#     precision_p1 = precision_score(y_test_p1, binary_predictions_p1)
-#     recall_p1 = recall_score(y_test_p1, binary_predictions_p1)
-#     f1_p1 = f1_score(y_test_p1, binary_predictions_p1)
-
-#     # Compute metrics for player 2
-#     precision_p2 = precision_score(y_test_p2, binary_predictions_p2)
-#     recall_p2 = recall_score(y_test_p2, binary_predictions_p2)
-#     f1_p2 = f1_score(y_test_p2, binary_predictions_p2)
-
-#     # Print evaluation metrics
-#     print('\nEvaluation Metrics:')
-#     print(f'Player 1 - Precision: {precision_p1}, Recall: {recall_p1}, F1: {f1_p1}')
-#     print(f'Player 2 - Precision: {precision_p2}, Recall: {recall_p2}, F1: {f1_p2}')
+        plt.tight_layout()
+        plt.show()
+# Assuming x_test is your test data
+evaluate_model(model, x_test, y_test_p1, y_test_p2, threshold_p1=0.5, threshold_p2=0.75)

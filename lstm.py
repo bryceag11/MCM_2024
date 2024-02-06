@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import torch.nn.functional as F
 
 class LSTMMomentumPredictor(nn.Module):
-    def __init__(self, hidden_layer_size=50, dropout_rate=0.5):
+    def __init__(self, hidden_layer_size=50, dropout_rate=0.5, sequence_length=302):
         super(LSTMMomentumPredictor, self).__init__()
         self.hidden_layer_size = hidden_layer_size 
+        self.sequence_length = sequence_length
 
         # Convolutional layers 
         self.conv1 = nn.Conv1d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
@@ -20,8 +22,8 @@ class LSTMMomentumPredictor(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
 
         # Fully connected layers for two outputs
-        self.linear_p1 = nn.Linear(in_features=self.hidden_layer_size * 2, out_features=1)
-        self.linear_p2 = nn.Linear(in_features=self.hidden_layer_size * 2, out_features=1)
+        self.linear_p1 = nn.Linear(in_features=self.hidden_layer_size * 2, out_features=302)
+        self.linear_p2 = nn.Linear(in_features=self.hidden_layer_size * 2, out_features=302)
 
     def forward(self, x):
         # Convolutional layers 
@@ -40,8 +42,8 @@ class LSTMMomentumPredictor(nn.Module):
         lstm_out = self.dropout(lstm_out)
 
         # Fully connected for two outputs
-        predictions_p1 = self.linear_p1(lstm_out[:, -1, :])
-        predictions_p2 = self.linear_p2(lstm_out[:, -1, :])
+        predictions_p1 = F.sigmoid(self.linear_p1(lstm_out[:, -1, :]))
+        predictions_p2 = F.sigmoid(self.linear_p2(lstm_out[:, -1, :]))
 
         return predictions_p1, predictions_p2
 
