@@ -17,12 +17,12 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 df = pd.read_csv('Wimbledon_featured_matches.csv')
 
 label_encoders = {}
+
 # Imputation of data
 imputation_features = df[['winner_shot_type', 'serve_width', 'serve_depth', 'return_depth']].copy()
 
 for feature in imputation_features.columns:
     if imputation_features[feature].dtype == 'object':
-        
         # Initialization of the LabelEncoder for feature instance 
         le = LabelEncoder()
 
@@ -42,7 +42,6 @@ for feature, le in label_encoders.items():
     # Transform the current feature in df
     df[feature] = le.transform(df[feature].fillna('Unknown'))
 
-# Time conversion
 
 # Replace '25' with '1' and '24' with '0' in 'elapsed_time'
 time_column = df['elapsed_time'].replace({'25:': '1:', '24:': '0:'}, regex=True)
@@ -54,7 +53,6 @@ time_in_minutes = [(int(str(datetime.datetime.strptime(time_str, "%H:%M:%S").tim
                    int(str(datetime.datetime.strptime(time_str, "%H:%M:%S").time()).split(':')[2])/60)  for time_str in time_column]
 
 # Normalize the time data
-
 time = np.array(time_in_minutes)
 
 # scaler = MinMaxScaler()
@@ -62,46 +60,18 @@ time = np.array(time_in_minutes)
 
 df['elapsed_time'] = time
 
-
-# Score normalization
-
-# col_norm = ['set_no', 'game_no','p1_sets', 'p2_sets']
-
-# df[col_norm] = df[col_norm].apply(lambda x: (x - x.min()) / (x.max() - x.min()))
-
 # Additional score normalization
 df['p1_score'] = df['p1_score'].replace('AD', 50).astype(int)
-# df['p1_score'] = df['p1_score'].replace(40, 0.03).astype(int)
-# df['p1_score'] = df['p1_score'].replace(30, 0.02).astype(int)
-# df['p1_score'] = df['p1_score'].replace(15, 0.01).astype(int)
-
 df['p2_score'] = df['p2_score'].replace('AD', 50).astype(int)
-# df['p2_score'] = df['p2_score'].replace(40, 0.03).astype(int)
-# df['p2_score'] = df['p2_score'].replace(30, 0.02).astype(int)
-# df['p2_score'] = df['p2_score'].replace(15, 0.01).astype(int)
-
-
-# # Normalize the distances
-# scaler = MinMaxScaler(feature_range=(-1, 1))
-# df['p1_distance_run'] = scaler.fit_transform(df['p1_distance_run'].values.reshape(-1, 1))
-
-# scaler = MinMaxScaler(feature_range=(-1, 1))
-# df['p2_distance_run'] = scaler.fit_transform(df['p2_distance_run'].values.reshape(-1, 1))
-
-# # Impute NA values in 'speed_mph' with 0
 df['speed_mph'].fillna(0, inplace=True)
 
-# # Scale 'speed_mph'
-# scaler = MinMaxScaler()
-# df['speed_mph'] = scaler.fit_transform(df[['speed_mph']])
+
 dft = df.copy()
 df = df.iloc[0:302]
 
 dft = dft.iloc[6952:7254]
         
-
 momentum = MomentumFeatures(df)
-
 
 momentum_dfs = []
 momentum_df = []
@@ -199,11 +169,8 @@ for i in range(len(mom_p1t)):
     momentum_p1t.loc[i, 'Momentum_P1T'] = mom_p1t_sum
     momentum_p2t.loc[i, 'Momentum_P2T'] = mom_p2t_sum
 print(momentum_p1, momentum_p2)
-# ###################################################################################
 
-
-# # #######################
-# # Assuming feature_df is your feature DataFrame and y_train_p1, y_train_p2 are target data
+# Assuming feature_df is your feature DataFrame and y_train_p1, y_train_p2 are target data
 feature_df_np = normalized_df.to_numpy(dtype=np.float32)
 feature_dft_np = normalized_dft.to_numpy(dtype=np.float32)
 
@@ -213,8 +180,6 @@ x_test = torch.from_numpy(feature_dft_np).float().unsqueeze(0)
 # Reshape x_train to (1, 16, 302) assuming you have 16 features and 302 data points
 x_train = x_train.transpose(1, 2)
 x_test = x_test.transpose(1, 2)
-
-
 
 numpy_momentum_p1 = momentum_p1.values.astype(np.float32)
 numpy_momentum_p2 = momentum_p2.values.astype(np.float32)
@@ -237,9 +202,7 @@ delta_p2 = df['p2_score'].diff()
 normalized_p1 = (df['p1_score'] - df['p1_score'].min()) / (df['p1_score'].max() - df['p1_score'].min())
 normalized_p2 = (df['p2_score'] - df['p2_score'].min()) / (df['p2_score'].max() - df['p2_score'].min())
 
-
 # Plot the delta or change in points against the momentum for P1
-
 fig, axes = plt.subplots(nrows=2, ncols=1, sharex=True, figsize=(24, 16))
 
 # Plot the scaled delta scores against the momentum for P1
@@ -306,13 +269,6 @@ for epoch in range(epochs):
     training_losses.append(epoch_loss / len(x_train))
 
 epochs_range = range(1, epochs + 1)
-
-# plt.plot(epochs_range, training_losses, label='Training Loss')
-# plt.title('Training Loss Over Epochs')
-# plt.xlabel('Epoch')
-# plt.ylabel('Loss')
-# plt.legend()
-# plt.show()
 
 from sklearn.metrics import mean_squared_error, r2_score, precision_recall_fscore_support, precision_recall_curve
 
